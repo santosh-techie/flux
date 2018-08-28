@@ -340,16 +340,15 @@ func TestDaemon_NotifyChange(t *testing.T) {
 	}
 
 	// Check that history was written to
-	var e []event.Event
 	w.Eventually(func() bool {
-		e, _ = events.AllEvents(time.Time{}, -1, time.Time{})
-		return len(e) > 0
-	}, "Waiting for new events")
-	if 1 != len(e) {
-		t.Fatal("Expected one log event from the sync, but got", len(e))
-	} else if event.EventSync != e[0].Type {
-		t.Fatalf("Expected event with type %s but got %s", event.EventSync, e[0].Type)
-	}
+		es, _ := events.AllEvents(time.Time{}, -1, time.Time{})
+		for _, e := range es {
+			if e.Type == event.EventSync {
+				return true
+			}
+		}
+		return false
+	}, "Waiting for new sync events")
 }
 
 // When I perform a release, it should add a job to update git to the queue
@@ -387,7 +386,8 @@ func TestDaemon_Release(t *testing.T) {
 		}
 		defer co.Clean()
 		// open a file
-		if file, err := os.Open(filepath.Join(co.ManifestDir(), "helloworld-deploy.yaml")); err == nil {
+		dirs := co.ManifestDirs()
+		if file, err := os.Open(filepath.Join(dirs[0], "helloworld-deploy.yaml")); err == nil {
 
 			// make sure it gets closed
 			defer file.Close()
@@ -431,7 +431,8 @@ func TestDaemon_PolicyUpdate(t *testing.T) {
 			return false
 		}
 		defer co.Clean()
-		m, err := d.Manifests.LoadManifests(co.Dir(), co.ManifestDir())
+		dirs := co.ManifestDirs()
+		m, err := d.Manifests.LoadManifests(co.Dir(), dirs)
 		if err != nil {
 			t.Fatalf("Error: %s", err.Error())
 		}
@@ -605,7 +606,6 @@ func mockDaemon(t *testing.T) (*Daemon, func(), func(), *cluster.Mock, *mockEven
 			return kresource.ParseMultidoc(allDefs, "test")
 		}
 		k8s.PingFunc = func() error { return nil }
-		k8s.ServicesWithPoliciesFunc = (&kubernetes.Manifests{}).ServicesWithPolicies
 		k8s.SomeServicesFunc = func([]flux.ResourceID) ([]cluster.Controller, error) {
 			return []cluster.Controller{
 				singleService,
@@ -776,7 +776,8 @@ func (w *wait) ForImageTag(t *testing.T, d *Daemon, service, container, tag stri
 		}
 		defer co.Clean()
 
-		m, err := d.Manifests.LoadManifests(co.Dir(), co.ManifestDir())
+		dirs := co.ManifestDirs()
+		m, err := d.Manifests.LoadManifests(co.Dir(), dirs)
 		assert.NoError(t, err)
 
 		resources, err := d.Manifests.ParseManifests(m[service].Bytes())

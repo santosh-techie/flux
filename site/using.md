@@ -329,6 +329,15 @@ CONTROLLER                     STATUS   UPDATES
 default:deployment/helloworld  success
 ```
 
+# Releasing an image to a locked controller
+
+It may be desirable to release an image to a locked controller while
+maintaining the lock afterwards. In order to not having to modify the
+lock policy (which includes author and reason), one may use `--force`:
+```
+fluxctl release --controller=default:deployment/helloworld --update-all-images --force
+```
+
 # Unlocking a Controller
 
 Unlocking a controller allows it to have manual or automated releases
@@ -389,6 +398,38 @@ individually:
 fluxctl policy --controller=default:deployment/helloworld --tag='helloworld=prod-*' --tag='sidecar=prod-*'
 ``` 
 
+Manual releases without explicit mention of the target image will
+also adhere to tag filters.
+This will only release the newest image matching the tag filter:
+```
+fluxctl release --controller=default:deployment/helloworld --update-all-images
+```
+
+To release an image outside of tag filters, either specify the image:
+```
+fluxctl release --controller=default:deployment/helloworld --update-image=helloworld:dev-abc123
+```
+or use `--force`:
+```
+fluxctl release --controller=default:deployment/helloworld --update-all-images --force
+```
+
+Please note that automation might immediately undo this.
+
+## Filter pattern types
+
+Flux currently offers support for `glob`, `semver` and `regexp` based filtering.
+
+### Glob
+
+The glob (`*`) filter is the simplest filter Flux supports, a filter can contain
+multiple globs:
+```
+fluxctl policy --controller=default:deployment/helloworld --tag-all='glob:master-v1.*.*'
+```
+
+### Semver
+
 If your images use [semantic versioning](https://semver.org) you can filter by image tags
 that adhere to certain constraints:
 ```
@@ -402,6 +443,16 @@ fluxctl policy --controller=default:deployment/helloworld --tag-all='semver:*'
 
 Using a semver filter will also affect how flux sorts images, so
 that the higher versions will be considered newer.
+
+### Regexp
+
+If your images have complex tags you can filter by regular expression:
+```
+fluxctl policy --controller=default:deployment/helloworld --tag-all='regexp:^([a-zA-Z]+)$'
+```
+
+Please bear in mind that if you want to match the whole tag,
+you must bookend your pattern with `^` and `$`.
 
 ## Actions triggered through `fluxctl`
 

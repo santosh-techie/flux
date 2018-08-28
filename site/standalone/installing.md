@@ -19,6 +19,19 @@ You will need to have Kubernetes set up. For a quick local test,
 you can use `minikube` or `kubeadm`. Any other Kubernetes setup
 will work as well though.
 
+When running on cloud (e.g. GKE), use nodes with at least 2 cpu's.
+When using nodes of only 1 cpu (like `n1-standard-1`), an upgrade
+may be stuck with not enough CPU resources. This is seen by pods
+hanging in PENDING state and with:
+
+```
+$ kubectl describe pod/helloworld-... | tail -3
+Events:
+  Type     Reason            Age                From               Message
+  ----     ------            ----               ----               -------
+  Warning  FailedScheduling  3m (x37 over 13m)  default-scheduler  0/2 nodes are available: 2 Insufficient cpu.
+```
+
 ## Set up Flux
 
 Get Flux:
@@ -41,6 +54,17 @@ In our example we are going to use
 [flux-example](https://github.com/weaveworks/flux-example). If you
 want to use that too, be sure to create a fork of it on Github and
 add the git URL to the config file above.
+
+If working on e.g. GKE with RBAC enabled, you will need to add a clusterrolebinding:
+
+```sh
+kubectl create clusterrolebinding "cluster-admin-$(whoami)" --clusterrole=cluster-admin --user="$(gcloud config get-value core/account)"
+```
+to avoid an error along the lines of
+
+`Error from server (Forbidden): error when creating "deploy/flux-account.yaml":
+clusterroles.rbac.authorization.k8s.io "flux" is forbidden: attempt to grant
+extra privileges:`
 
 In the next step, deploy Flux to the cluster:
 

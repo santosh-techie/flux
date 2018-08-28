@@ -31,7 +31,7 @@ Add the weaveworks repo:
 helm repo add weaveworks https://weaveworks.github.io/flux
 ```
 
-To install the chart with the release name `flux`:
+#### To install the chart with the release name `flux`:
 
 ```console
 $ helm install --name flux \
@@ -40,7 +40,7 @@ $ helm install --name flux \
 weaveworks/flux
 ```
 
-To connect Flux to a Weave Cloud instance:
+#### To connect Flux to a Weave Cloud instance:
 
 ```console
 helm install --name flux \
@@ -49,7 +49,7 @@ helm install --name flux \
 weaveworks/flux
 ```
 
-To install Flux with the Helm operator (alpha version):
+#### To install Flux with the Helm operator (alpha version):
 
 ```console
 $ helm install --name flux \
@@ -59,7 +59,62 @@ $ helm install --name flux \
 weaveworks/flux
 ```
 
-The [configuration](#configuration) section lists the parameters that can be configured during installation.
+#### To install Flux with a private git host:
+
+When using a private git host, setting the `ssh.known_hosts` variable 
+is required for enabling successful key matches because `StrictHostKeyChecking` 
+is enabled during flux git daemon operations.
+
+By setting the `ssh.known_hosts` variable, a configmap will be created
+called `flux-ssh-config` which in turn will be mounted into a volume named
+`sshdir` at `/root/.ssh/known_hosts`.
+
+* Get the `ssh.known_hosts` keys by running the following command:
+
+```bash
+ssh-keyscan <your_git_host_domain>
+```
+
+To prevent a potential man-in-the-middle attack, one should
+verify the ssh keys acquired through the `ssh-keyscan` match expectations
+using an alternate mechanism.
+
+* Start flux and flux helm operator:
+
+  - Using a string for setting `known_hosts`
+  
+    ```sh
+    YOUR_GIT_HOST=your_git_host.example.com
+    KNOWN_HOSTS='domain ssh-rsa line1
+    domain ecdsa-sha2-line2
+    domain ssh-ed25519 line3'
+    
+    helm install \
+    --name flux \
+    --set helmOperator.create=true \
+    --set git.url="ssh://git@${YOUR_GIT_HOST}:weaveworks/flux-helm-test.git" \
+    --set-string ssh.known_hosts="${KNOWN_HOSTS}" \
+    --namespace flux \
+    chart/flux 
+    ```
+    
+  - Using a file for setting `known_hosts`
+  
+    Copy known_hosts keys into a temporary file `/tmp/flux_known_hosts`
+    
+    ```sh
+    YOUR_GIT_HOST=your_git_host.example.com
+    
+    helm install \
+    --name flux \
+    --set helmOperator.create=true \
+    --set git.url="ssh://git@${YOUR_GIT_HOST}:weaveworks/flux-helm-test.git" \
+    --set-file ssh.known_hosts=/tmp/flux_known_hosts \
+    --namespace flux \
+    chart/flux 
+    ```
+
+The [configuration](#configuration) section lists all the parameters that can be configured during installation.
 
 #### Setup Git deploy
 
@@ -106,13 +161,28 @@ The following tables lists the configurable parameters of the Weave Flux chart a
 | `git.path` | Path within git repo to locate Kubernetes manifests (relative path) | None
 | `git.user` | Username to use as git committer | `Weave Flux`
 | `git.email` | Email to use as git committer | `support@weave.works`
-| `git.chartsPath` | Path within git repo to locate Helm charts (relative path) | `charts`
-| `git.pollInterval` | Period at which to poll git repo for new commits | `30s`
-| `ssh.known_hosts`  | The contents of an SSH `known_hosts` file, if you need to supply host key(s) |
+| `git.setAuthor` | If set, the author of git commits will reflect the user who initiated the commit and will differ from the git committer. | `false`
+| `git.label` | Label to keep track of sync progress, used to tag the Git branch | `flux-sync`
+| `git.ciSkip` | Append "[ci skip]" to commit messages so that CI will skip builds | `false`
+| `git.pollInterval` | Period at which to poll git repo for new commits | `5m`
+| `ssh.known_hosts`  | The contents of an SSH `known_hosts` file, if you need to supply host key(s) | None
+| `registry.cacheExpiry` | Duration to keep cached image info in memcached | `1h`
+| `registry.pollInterval` | Period at which to check for updated images | `5m`
+| `registry.rps` | Maximum registry requests per second per host | `200`
+| `registry.burst` | Maximum number of warmer connections to remote and memcache | `125`
+| `registry.trace` |  Output trace of image registry requests to log | `false`
+| `registry.insecureHosts` | Use HTTP rather than HTTPS for these image registry domains | None
 | `helmOperator.create` | If `true`, install the Helm operator | `false`
 | `helmOperator.repository` | Helm operator image repository | `quay.io/weaveworks/helm-operator`
 | `helmOperator.tag` | Helm operator image tag | `0.1.0-alpha`
 | `helmOperator.pullPolicy` | Helm operator image pull policy | `IfNotPresent`
+| `helmOperator.chartsSyncInterval` | Interval at which to check for changed charts | `3m`
+| `helmOperator.chartsSyncTimeout` | Timeout when checking for changed charts | `1m`
+| `helmOperator.git.url` | URL of git repo with Helm charts | `git.url`
+| `helmOperator.git.branch` | Branch of git repo to use for Helm charts | `master`
+| `helmOperator.git.chartsPath` | Path within git repo to locate Helm charts (relative path) | `charts`
+| `helmOperator.git.pollInterval` | Period at which to poll git repo for new commits | `git.pollInterval`
+| `helmOperator.git.secretName` | Kubernetes secret with the SSH private key | None
 | `helmOperator.logReleaseDiffs` | Helm operator should log the diff when a chart release diverges (possibly insecure) | `false`
 | `helmOperator.tillerNamespace` | Namespace in which the Tiller server can be found | `kube-system`
 | `helmOperator.tls.enable` | Enable TLS for communicating with Tiller | `false`

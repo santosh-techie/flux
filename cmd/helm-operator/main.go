@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/weaveworks/flux/checkpoint"
 	"github.com/weaveworks/flux/git"
 	clientset "github.com/weaveworks/flux/integrations/client/clientset/versioned"
 	ifinformers "github.com/weaveworks/flux/integrations/client/informers/externalversions"
@@ -30,6 +32,8 @@ var (
 	err     error
 	logger  log.Logger
 	kubectl string
+
+	versionFlag *bool
 
 	kubeconfig *string
 	master     *string
@@ -61,10 +65,13 @@ var (
 )
 
 const (
+	product              = "weave-flux-helm"
 	defaultGitChartsPath = "charts"
 
 	ErrOperatorFailure = "Operator failure: %q"
 )
+
+var version = "unversioned"
 
 func init() {
 	// Flags processing
@@ -76,6 +83,8 @@ func init() {
 		fmt.Fprintf(os.Stderr, "FLAGS\n")
 		fs.PrintDefaults()
 	}
+
+	versionFlag = fs.Bool("version", false, "Print version and exit")
 
 	kubeconfig = fs.String("kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	master = fs.String("master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
@@ -103,8 +112,15 @@ func init() {
 }
 
 func main() {
-
+	// Stop glog complaining
+	flag.CommandLine.Parse([]string{"-logtostderr"})
+	// Now do our own
 	fs.Parse(os.Args)
+
+	if *versionFlag {
+		println(version)
+		os.Exit(0)
+	}
 
 	// LOGGING ------------------------------------------------------------------------------
 	{
@@ -220,10 +236,11 @@ func main() {
 	// Reference to shared index informers for the FluxHelmRelease
 	fhrInformer := ifInformerFactory.Helm().V1alpha2().FluxHelmReleases()
 
-	opr := operator.New(log.With(logger, "component", "operator"), *logReleaseDiffs,
-		kubeClient, fhrInformer, rel, repoConfig)
+	opr := operator.New(log.With(logger, "component", "operator"), *logReleaseDiffs, kubeClient, fhrInformer, chartSync, repoConfig)
 	// Starts handling k8s events related to the given resource kind
 	go ifInformerFactory.Start(shutdown)
+
+	checkpoint.CheckForUpdates(product, version, nil, log.With(logger, "component", "checkpoint"))
 
 	if err = opr.Run(*queueWorkerCount, shutdown, shutdownWg); err != nil {
 		msg := fmt.Sprintf("Failure to run controller: %s", err.Error())
